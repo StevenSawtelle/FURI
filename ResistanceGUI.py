@@ -4,23 +4,18 @@ import csv
 import sys
 
 supply = None
+headerRowCreated = False
 
 class MeasurementsModel:
     #initialize model
     def __init__(self, vc):
         #vc is controller for communication with ResistanceViewController
         self.vc = vc
-        self.listOfMeasurements = []
+        #listOfMeasurements will hold list of lists, with each list
+        #   being a resistance measurement and its data
+        self.listOfMeasurements = [['ID', 'Tip', 'Correction', 'Thickness', 'Resistance']]
+        #start counting from the first mean
         self.countOfRes = 1
-
-    def write_csv(self, listOfMeasurements):
-        pass
-
-    def supply_header_row(self):
-        pass
-
-    def supply_data_row(self):
-        pass
 
     def getListOfMeasureMents(self):
         #returns list containing four user-inputted values to test for
@@ -50,7 +45,7 @@ class MeasurementsModel:
         if(self.countOfRes==6):
             self.countOfRes=1
 
-class ResistanceViewController: #Conforms to ResistanceViewProtocol (it can act as a delegate for the view)
+class ResistanceViewController:
     #initialize primary view controller
     def __init__(self, parent):
         #needed for view
@@ -66,7 +61,7 @@ class ResistanceViewController: #Conforms to ResistanceViewProtocol (it can act 
         #interact with supply, which is a global object
         global supply
         try:
-            #try to connect to resource connected. the first is always 'ASRL1::INSTR', so go to second
+            #try to connect to resource connected
             supply = rm.open_resource('USB0::0x0957::0x4D18::MY54220089::INSTR')
         except visa.VisaIOError:
             #if error is detected, let user know and kill program
@@ -103,26 +98,34 @@ class ResistanceViewController: #Conforms to ResistanceViewProtocol (it can act 
             self.model.updateCountOfRes()
         except visa.VisaIOError:
             #if unable to query, there is an issue with connecting to device
-            print("Error connecting to device")
+            print("Error connecting to device, please recheck connection and restart")
+            #sys.exit(1)
 
     def exportPressed(self):
         #use list of user-inputted measurements to export data
         self.write_to_csv(self.model.listOfMeasurements)
 
     def write_to_csv(self, l):
+        #open csv file to be written to. creates if nonexistant and overrides otherwise
         with open('resistancedata.csv', 'w', newline='') as csvfile:
+            #make an object that allows for writing
             csvwriter = csv.writer(csvfile, quoting=csv.QUOTE_MINIMAL)
+            #l should be one list, the main list from model
             for i in l:
+                #write all contents of each list to csv file
                 csvwriter.writerow(i)
+                #print these elements for debugging
                 print(i)
 
-    def listWasChangedDeleate(self):
+    def listWasChangedDelegate(self):
+        #gets called when list is changed in model
+        #nothing particularly needed here, simply prints the list to see what was changed
         print(self.model.getListOfMeasureMents())
 
 
 class ResistanceView:
     def loadView(self):
-    #primary setep of main GUI objects
+        #primary setep of main GUI objects
         #Create and place objects simultaneously
         # Column 0, Entry Labels
         id_label = Label(self.frame, text="ID").grid(row=0, column=0)
@@ -156,24 +159,26 @@ class ResistanceView:
         #basic setup
         self.frame = Frame()
         self.frame.grid(row=0, column=0)
-        #communicate with ResistanceViewController
+        #create controller object to communicate with ResistanceViewController
         self.vc = vc
         #create default values of important labels/entries
+        #tkinter uses StringVar
         self.correction_entry_text = StringVar()
         self.thickness_entry_text = StringVar()
         self.id_entry_text = StringVar()
         self.tip_entry_text = StringVar()
+        #mean values will have default text
         self.m1_label_text = StringVar()
-        self.m1_label_text.set('Mean 1: 1')
+        self.m1_label_text.set('Mean 1: 0')
         self.m2_label_text = StringVar()
-        self.m2_label_text.set('Mean 2: 2')
+        self.m2_label_text.set('Mean 2: 0')
         self.m3_label_text = StringVar()
-        self.m3_label_text.set('Mean 3: 3')
+        self.m3_label_text.set('Mean 3: 0')
         self.m4_label_text = StringVar()
-        self.m4_label_text.set('Mean 4: 4')
+        self.m4_label_text.set('Mean 4: 0')
         self.m5_label_text = StringVar()
-        self.m5_label_text.set('Mean 5: 5')
-        #call load view to show program
+        self.m5_label_text.set('Mean 5: 0')
+        #call load view to show program and continue forward
         self.loadView()
 
     def getIdText(self):
@@ -194,8 +199,8 @@ class ResistanceView:
 
     def setMeanText(self, id, value):
         #update means in view based on which one is active
-        print(id)
-        print(type(id))
+        #bastardized python switch on id for [1, 5]
+        #set appropriate mean value as decided by id
         if(id==1):
             self.m1_label_text.set("Mean 1: " + value)
         if(id==2):
@@ -206,6 +211,7 @@ class ResistanceView:
             self.m4_label_text.set("Mean 4: " + value)
         if(id==5):
             self.m5_label_text.set("Mean 5: " + value)
+
     def setM1Text(self, text):
         #sets text of mean 1 label
         self.m1_label_text.set('Mean 1: '+text)
@@ -226,11 +232,15 @@ class ResistanceView:
         #sets text of mean 5 label
         self.m5_label_text.set('Mean 5: '+text)
 
-if __name__ == '__main__':
-    #start of program
+def main():
+    # start of program
     root = Tk()
-    #set background color
+    # set background color
     frame = Frame(root, bg='#0555ff')
     root.title("Resistance GUI")
+    # main chunk of program
     app = ResistanceViewController(root)
     root.mainloop()
+
+if __name__ == '__main__':
+    main()
