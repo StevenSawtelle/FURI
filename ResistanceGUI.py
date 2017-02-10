@@ -3,8 +3,8 @@ import visa
 import csv
 import sys
 
+#supply is used multiple times in controller, easiest way to account for this is to make it global
 supply = None
-headerRowCreated = False
 
 class MeasurementsModel:
     #initialize model
@@ -13,7 +13,10 @@ class MeasurementsModel:
         self.vc = vc
         #listOfMeasurements will hold list of lists, with each list
         #   being a resistance measurement and its data
-        self.listOfMeasurements = [['ID', 'Tip', 'Correction', 'Thickness', 'Resistance']]
+        self.listOfMeasurements = [['Id', 'Tip', 'Correction', 'Thickness', 'Resistance']]
+        """fun fact: the first element was originall ID, but excel automatically assumes any csv file
+        that starts with ID as the first element is a sylk file. all it takes is changing capitals to
+        avoid it, as the literal string 'ID' is the only thing that does this!"""
         #start counting from the first mean
         self.countOfRes = 1
 
@@ -25,10 +28,11 @@ class MeasurementsModel:
         return self.listOfMeasurements[num]
 
     def addToList(self, lis):
-        #add lis to the end of list 'l'
-        temp = self.listOfMeasurements
-        temp.append(lis)
-        self.listOfMeasurements = temp
+        #add lis to the end of list 'listOfMeasurements'
+        #do this by creating temp copy, appending new list, and reassigning that value to original
+        tempResList = self.listOfMeasurements
+        tempResList.append(lis)
+        self.listOfMeasurements = tempResList
         #self.listWasChanged()
 
     def listWasChanged(self):
@@ -57,19 +61,17 @@ class ResistanceViewController:
         #get list of all resources connected to device
         rm = visa.ResourceManager()
         #print resources, for debugging
-        print(rm.list_resources())
         #interact with supply, which is a global object
         global supply
         try:
             #try to connect to resource connected
-            supply = rm.open_resource('USB0::0x0957::0x4D18::MY54220089::INSTR')
+            supply = rm.open_resource(rm.list_resources()[0])
         except visa.VisaIOError:
             #if error is detected, let user know and kill program
             print("No object found, please connect device")
             sys.exit(1)
         #this can measure voltage, not needed for this program now. left for example
         #print(supply.query("MEASure:VOLTage:DC?"))
-
 
     def measurePressed(self):
         #take in value from entry fields and proceed with taking measurements
