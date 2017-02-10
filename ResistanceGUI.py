@@ -1,18 +1,19 @@
 from tkinter import Tk, Label, Button, Entry, N, E, S, W, Frame, StringVar
 import visa
 import csv
+import sys
 
 supply = None
 
 class MeasurementsModel:
     #initialize model
     def __init__(self, vc):
-        #vc is for communication with ResistanceViewController
+        #vc is controller for communication with ResistanceViewController
         self.vc = vc
-        self.l = []
+        self.listOfMeasurements = []
         self.countOfRes = 1
 
-    def write_csv(self, l):
+    def write_csv(self, listOfMeasurements):
         pass
 
     def supply_header_row(self):
@@ -23,16 +24,16 @@ class MeasurementsModel:
 
     def getListOfMeasureMents(self):
         #returns list containing four user-inputted values to test for
-        return self.l
+        return self.listOfMeasurements
 
     def getSpecificMeasurement(self, num):
-        return self.l[num]
+        return self.listOfMeasurements[num]
 
     def addToList(self, lis):
         #add lis to the end of list 'l'
-        temp = self.l
+        temp = self.listOfMeasurements
         temp.append(lis)
-        self.l = temp
+        self.listOfMeasurements = temp
         #self.listWasChanged()
 
     def listWasChanged(self):
@@ -40,7 +41,7 @@ class MeasurementsModel:
 
     def clearList(self):
         #clears list of previous measurements
-        self.l.clear()
+        self.listOfMeasurements.clear()
 
     def updateCountOfRes(self):
         #change number that is used to define what mean is being set
@@ -52,52 +53,61 @@ class MeasurementsModel:
 class ResistanceViewController: #Conforms to ResistanceViewProtocol (it can act as a delegate for the view)
     #initialize primary view controller
     def __init__(self, parent):
+        #needed for view
         self.parent = parent
+        #model for controller to communicate with
         self.model = MeasurementsModel(self)
-
-        rm = visa.ResourceManager()
-        print(rm.list_resources())
-        global supply
-        supply = rm.open_resource('USB0::0x0957::0x4D18::MY54220089::INSTR')
-        print(supply.query("MEASure:VOLTage:DC?"))
-        print(type(supply))
+        #view for controller to communicate with
         self.view = ResistanceView(self)
+        #get list of all resources connected to device
+        rm = visa.ResourceManager()
+        #print resources, for debugging
+        print(rm.list_resources())
+        #interact with supply, which is a global object
+        global supply
+        try:
+            #try to connect to resource connected. the first is always 'ASRL1::INSTR', so go to second
+            supply = rm.open_resource('USB0::0x0957::0x4D18::MY54220089::INSTR')
+        except visa.VisaIOError:
+            #if error is detected, let user know and kill program
+            print("No object found, please connect device")
+            sys.exit(1)
+        #this can measure voltage, not needed for this program now. left for example
+        #print(supply.query("MEASure:VOLTage:DC?"))
+
 
     def measurePressed(self):
         #take in value from entry fields and proceed with taking measurements
-        self.takeMeasurement()
-        """
-        self.model.clearList()
-        self.model.addToList(self.view.id_entry_text)
-        self.model.addToList(self.view.tip_entry_text)
-        self.model.addToList(self.view.correction_entry_text)
-        self.model.addToList(self.view.thickness_entry_text)"""
+        try:
+            #get resistance from probes connected to device
+            res = supply.query("MEASure:RESistance?")
+            #print this for debugging
+            print(self.model.countOfRes)
+            #set appropriate numbered mean text to the resistance just received
+            self.view.setMeanText(self.model.countOfRes, res)
+            #temporary list to store needed values that can be passed all together to model's main list
+            tempResList = []
+            #add id, tip, correction, thickness, resistance
+            tempResList.append(self.view.getIdText())
+            tempResList.append(self.view.getTipText())
+            tempResList.append(self.view.getCorrectionText())
+            tempResList.append(self.view.getThicknessText())
+            tempResList.append(res)
+            #print this list for debugging
+            print(tempResList)
+            #add this list to model's main list (of lists)
+            self.model.addToList(tempResList)
+            #print model's main list for debugging
+            print(self.model.listOfMeasurements)
+            #make sure next resistance gets set to appropriate mean number
+            self.model.updateCountOfRes()
+        except visa.VisaIOError:
+            #if unable to query, there is an issue with connecting to device
+            print("Error connecting to device")
 
     def exportPressed(self):
         #use list of user-inputted measurements to export data
-        self.write_to_csv(self.model.l)
-
-    def takeMeasurement(self):
-        try:
-            res = supply.query("MEASure:RESistance?")
-            print(self.model.countOfRes)
-            self.view.setMeanText(self.model.countOfRes, res)
-            #self.view.setM1Text(supply.query("MEASure:RESistance?"))
-            temp = []
-            #add id, tip, correction, thickness
-            temp.append(self.view.getIdText())
-            temp.append(self.view.getTipText())
-            temp.append(self.view.getCorrectionText())
-            temp.append(self.view.getThicknessText())
-            temp.append(supply.query("MEASure:RESistance?"))
-            print(temp)
-            self.model.addToList(temp)
-            print(self.model.l)
-            self.model.updateCountOfRes()
-        except visa.VisaIOError:
-            print("Error connecting to device")
-        #else:
-         #   print("General error")
+        self.write_to_csv(self.model.listOfMeasurements)
 
     def write_to_csv(self, l):
         with open('resistancedata.csv', 'w', newline='') as csvfile:
@@ -219,6 +229,7 @@ class ResistanceView:
 if __name__ == '__main__':
     #start of program
     root = Tk()
+    #set background color
     frame = Frame(root, bg='#0555ff')
     root.title("Resistance GUI")
     app = ResistanceViewController(root)
